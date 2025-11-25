@@ -98,7 +98,6 @@ const App: React.FC = () => {
     if (products.length === 0) return pages;
 
     const currentTagHeight = appConfig.visuals.tagHeight || 360;
-    const currentTagWidth = appConfig.visuals.tagWidth || 380;
     
     // A4 dimensions in px (approx 96 DPI)
     // Width 210mm ~ 794px
@@ -108,10 +107,13 @@ const App: React.FC = () => {
     const VERTICAL_MARGINS = 40; 
     const AVAILABLE_HEIGHT = PAGE_HEIGHT - VERTICAL_MARGINS;
     
-    // How many rows fit?
-    // We add a small buffer for tag margins
-    const tagTotalHeight = currentTagHeight + 8; // 8px visual margin
-    const rowsPerPage = Math.max(1, Math.floor(AVAILABLE_HEIGHT / tagTotalHeight));
+    // Row Gap (matches gap-y-6 which is 24px)
+    const ROW_GAP = 24; 
+    
+    // Calculate how many rows fit:
+    // (Rows * Height) + ((Rows - 1) * Gap) <= Available
+    // Rows * (Height + Gap) <= Available + Gap
+    const rowsPerPage = Math.max(1, Math.floor((AVAILABLE_HEIGHT + ROW_GAP) / (currentTagHeight + ROW_GAP)));
     
     // Always 2 columns for now as per design requirement
     const itemsPerPage = rowsPerPage * 2; 
@@ -120,7 +122,7 @@ const App: React.FC = () => {
       pages.push(products.slice(i, i + itemsPerPage));
     }
     return pages;
-  }, [products, appConfig.visuals.tagHeight, appConfig.visuals.tagWidth]);
+  }, [products, appConfig.visuals.tagHeight]);
 
 
   // --- Drag and Drop for Products ---
@@ -286,7 +288,7 @@ const App: React.FC = () => {
                   {paginatedProducts.map((pageProducts, pageIndex) => (
                     <div 
                         key={pageIndex}
-                        className="print-page bg-white shadow-xl mb-8 mx-auto relative flex flex-wrap content-start justify-center gap-x-4 pt-8 print:shadow-none print:m-0 print:mb-0 print:pt-4 print:break-after-page"
+                        className="print-page bg-white shadow-xl mb-8 mx-auto relative flex flex-wrap content-start justify-center gap-x-4 gap-y-6 pt-8 print:shadow-none print:m-0 print:mb-0 print:pt-4 print:break-after-page"
                         style={{ width: '210mm', height: '297mm', minHeight: '297mm' }}
                     >
                         {/* Page Number Indicator (Screen only) */}
@@ -295,7 +297,7 @@ const App: React.FC = () => {
                         {pageProducts.map((product) => (
                           <div 
                               key={product.id} 
-                              className="relative group print:inline-block print:m-0 mb-1 box-border cursor-grab active:cursor-grabbing"
+                              className="relative group print:inline-block print:m-0 box-border cursor-grab active:cursor-grabbing"
                               draggable={true}
                               onDragStart={(e) => onProductDragStart(e, product.id)}
                               onDragEnd={onProductDragEnd}

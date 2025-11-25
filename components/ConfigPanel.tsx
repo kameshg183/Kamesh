@@ -30,9 +30,39 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate, onSave, onR
     setIsDirty(true);
   };
 
+  const handleTextScaleChange = (id: string, value: number) => {
+    const newScales = { ...(config.visuals.textScales || {}), [id]: value };
+    onUpdate({
+       ...config,
+       visuals: { ...config.visuals, textScales: newScales }
+    });
+    setIsDirty(true);
+  };
+
   const handleSave = () => {
     onSave();
     setIsDirty(false);
+  };
+
+  const renderTextScaleSlider = (label: string, id: string) => {
+      const val = config.visuals.textScales?.[id] || 1;
+      return (
+          <div className="space-y-1">
+              <div className="flex justify-between">
+                  <label className="text-xs font-semibold text-gray-600">{label}</label>
+                  <span className="text-xs text-gray-400 font-mono">{val.toFixed(2)}x</span>
+              </div>
+              <input
+                  type="range"
+                  min="0.5"
+                  max="2.5"
+                  step="0.05"
+                  value={val}
+                  onChange={(e) => handleTextScaleChange(id, parseFloat(e.target.value))}
+                  className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"
+              />
+          </div>
+      );
   };
 
   return (
@@ -177,7 +207,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate, onSave, onR
                 <div className="flex justify-between items-center mb-2">
                     <label className="font-semibold text-gray-800 flex items-center">
                         <Type className="w-4 h-4 mr-2 text-gray-500" />
-                        Content Font Size
+                        Global Content Scale
                     </label>
                     <span className="text-sm text-gray-500 font-mono">{Math.round(config.visuals.fontScale * 100)}%</span>
                 </div>
@@ -190,7 +220,29 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate, onSave, onR
                     onChange={(e) => handleVisualChange('fontScale', parseFloat(e.target.value))}
                     className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"
                 />
-                <p className="text-xs text-gray-500 mt-2">Scales all text inside the tag. Use this to fit more content or make text larger.</p>
+                <p className="text-xs text-gray-500 mt-2">Scales all text inside the tag proportionally.</p>
+             </div>
+
+             {/* Specific Element Sizes */}
+             <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                <div className="mb-3">
+                    <label className="font-semibold text-gray-800 flex items-center">
+                        <Type className="w-4 h-4 mr-2 text-gray-500" />
+                        Specific Element Sizes
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">Fine-tune the size of specific text elements relative to the base size.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                    {renderTextScaleSlider("Product Name", "name")}
+                    {renderTextScaleSlider("Price (Our Price)", "price")}
+                    {renderTextScaleSlider("Label: Our Price", "labelPrice")}
+                    {renderTextScaleSlider("MRP (Original Price)", "mrp")}
+                    {renderTextScaleSlider("Label: MRP", "labelMrp")}
+                    {renderTextScaleSlider("Savings Amount", "savings")}
+                    {renderTextScaleSlider("Quantity / Size", "qty")}
+                    {renderTextScaleSlider("No Discount Label", "bestPrice")}
+                </div>
              </div>
 
              {/* Line Styles */}

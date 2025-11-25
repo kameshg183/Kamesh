@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Product, TagSize, FontTheme, AppConfiguration, TagSection, TagVisuals } from '../types';
 import { FONT_THEMES } from '../constants';
 import { Minus, Plus, X } from 'lucide-react';
@@ -29,7 +30,7 @@ const LAYOUT_CONFIG = {
       qty: 'text-sm'
     },
     footer: {
-      label: 'text-[9px]',
+      label: 'text-xs',
       mrp: 'text-2xl',
       price: 'text-2xl'
     }
@@ -47,7 +48,7 @@ const LAYOUT_CONFIG = {
       qty: 'text-lg'
     },
     footer: {
-      label: 'text-[10px]',
+      label: 'text-base',
       mrp: 'text-4xl',
       price: 'text-4xl'
     }
@@ -65,7 +66,7 @@ const LAYOUT_CONFIG = {
       qty: 'text-xl'
     },
     footer: {
-      label: 'text-xs',
+      label: 'text-xl',
       mrp: 'text-6xl',
       price: 'text-6xl'
     }
@@ -81,42 +82,68 @@ const EditableText: React.FC<{
   className?: string;
 }> = ({ id, scale, onUpdateScale, children, className }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [popoverPos, setPopoverPos] = useState({ top: 0, left: 0 });
 
-  // Close slider when clicking outside
+  // Update position on scroll/resize
   useEffect(() => {
     if (!isOpen) return;
+    
+    const updatePosition = () => {
+        if (containerRef.current) {
+            const rect = containerRef.current.getBoundingClientRect();
+            setPopoverPos({
+                top: rect.top,
+                left: rect.left + (rect.width / 2)
+            });
+        }
+    };
+
+    updatePosition();
+    window.addEventListener('scroll', updatePosition, true);
+    window.addEventListener('resize', updatePosition);
+    
     const handleClickOutside = () => setIsOpen(false);
-    document.addEventListener('click', handleClickOutside);
-    return () => document.removeEventListener('click', handleClickOutside);
+    // Use capture to ensure we catch clicks outside
+    document.addEventListener('click', handleClickOutside); 
+
+    return () => {
+        window.removeEventListener('scroll', updatePosition, true);
+        window.removeEventListener('resize', updatePosition);
+        document.removeEventListener('click', handleClickOutside);
+    };
   }, [isOpen]);
 
   const handleContainerClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    // Only open if not already open to prevent immediate close via doc listener
-    if (!isOpen) setIsOpen(true);
-  };
-
-  const handleSliderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    onUpdateScale(id, parseFloat(e.target.value));
+    if (!isOpen) {
+        setIsOpen(true);
+    }
   };
 
   return (
     <div 
+      ref={containerRef}
       className={`relative group/text rounded cursor-pointer transition-colors hover:bg-blue-50/50 ${className || ''}`} 
       onClick={handleContainerClick}
     >
       {/* Dashed outline on hover to indicate interactivity */}
       <div className="absolute inset-0 border border-transparent group-hover/text:border-blue-300 border-dashed rounded pointer-events-none no-print"></div>
 
-      {/* The Text Content */}
-      <div style={{ fontSize: `${scale}em` }} className="relative z-0">
+      {/* The Text Content - Using zoom to scale Tailwind rem-based classes correctly */}
+      <div style={{ zoom: scale }} className="relative z-0">
         {children}
       </div>
 
-      {/* Popover Slider */}
-      {isOpen && (
+      {/* Popover Slider - Rendered via Portal to break out of overflow:hidden */}
+      {isOpen && createPortal(
         <div 
-          className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 bg-gray-900 text-white p-2 rounded shadow-xl z-50 flex items-center gap-2 no-print"
+          className="fixed bg-gray-900 text-white p-2 rounded shadow-xl z-[9999] flex items-center gap-2 no-print"
+          style={{
+              top: popoverPos.top - 8,
+              left: popoverPos.left,
+              transform: 'translate(-50%, -100%)'
+          }}
           onClick={(e) => e.stopPropagation()} // Prevent close on slider click
         >
           <button className="p-1 hover:bg-gray-700 rounded" onClick={() => onUpdateScale(id, Math.max(0.5, scale - 0.1))}>
@@ -128,7 +155,7 @@ const EditableText: React.FC<{
             max="2.5" 
             step="0.1" 
             value={scale} 
-            onChange={handleSliderChange}
+            onChange={(e) => onUpdateScale(id, parseFloat(e.target.value))}
             className="w-20 h-1 bg-gray-500 rounded-lg appearance-none cursor-pointer accent-blue-500"
           />
           <button className="p-1 hover:bg-gray-700 rounded" onClick={() => onUpdateScale(id, Math.min(3, scale + 0.1))}>
@@ -138,7 +165,8 @@ const EditableText: React.FC<{
             <X size={12} />
           </button>
           <div className="absolute bottom-[-4px] left-1/2 -translate-x-1/2 w-2 h-2 bg-gray-900 rotate-45"></div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
@@ -336,7 +364,9 @@ const PriceTag: React.FC<PriceTagProps> = ({
     <div className={`flex-shrink-0 cursor-move w-full overflow-hidden min-h-0`}>
       <div className="flex justify-between items-end w-full">
         <div className="text-center px-1">
-          <div className={`${theme.metaClass} text-black font-bold uppercase ${layout.footer.label} mb-1`}>{labels.mrpLabel}</div>
+          <EditableText id="labelMrp" scale={textScales['labelMrp'] || 1} onUpdateScale={handleTextScaleUpdate}>
+             <div className={`${theme.metaClass} text-black font-bold uppercase ${layout.footer.label} mb-1`}>{labels.mrpLabel}</div>
+          </EditableText>
           <EditableText id="mrp" scale={textScales['mrp'] || 1} onUpdateScale={handleTextScaleUpdate}>
              <div className={`${theme.priceClass} ${layout.footer.mrp} line-through decoration-red-500 decoration-2 text-gray-500 font-black leading-none`}>
                 {labels.currency}{product.mrp}
@@ -345,7 +375,9 @@ const PriceTag: React.FC<PriceTagProps> = ({
         </div>
         
         <div className="text-right px-1">
-          <div className={`${theme.metaClass} text-black font-bold uppercase ${layout.footer.label} mb-1`}>{labels.priceLabel}</div>
+          <EditableText id="labelPrice" scale={textScales['labelPrice'] || 1} onUpdateScale={handleTextScaleUpdate}>
+             <div className={`${theme.metaClass} text-black font-bold uppercase ${layout.footer.label} mb-1`}>{labels.priceLabel}</div>
+          </EditableText>
           <EditableText id="price" scale={textScales['price'] || 1} onUpdateScale={handleTextScaleUpdate}>
             <div className={`${theme.priceClass} ${layout.footer.price} font-black text-black leading-none`}>
                 {labels.currency} {product.price}
