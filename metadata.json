@@ -1,0 +1,5 @@
+{
+  "name": "Smart Price Tag Printer",
+  "description": "Generate and print professional retail price tags from spreadsheet data, optimized for A4 paper layout.",
+  "requestFramePermissions": []
+}
