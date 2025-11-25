@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppConfiguration, TagLabels, TagVisuals } from '../types';
-import { RotateCcw, Save, Type, Palette, LayoutTemplate, Check } from 'lucide-react';
+import { RotateCcw, Save, Type, Palette, LayoutTemplate, Check, Undo, Redo } from 'lucide-react';
 import { DEFAULT_CONFIG } from '../constants';
 
 interface ConfigPanelProps {
@@ -8,9 +8,22 @@ interface ConfigPanelProps {
   onUpdate: (newConfig: AppConfiguration) => void;
   onSave: () => void;
   onReset: () => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
-const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate, onSave, onReset }) => {
+const ConfigPanel: React.FC<ConfigPanelProps> = ({ 
+  config, 
+  onUpdate, 
+  onSave, 
+  onReset,
+  onUndo,
+  onRedo,
+  canUndo,
+  canRedo
+}) => {
   const [activeTab, setActiveTab] = useState<'labels' | 'visuals'>('labels');
   const [isDirty, setIsDirty] = useState(false);
 
@@ -103,6 +116,33 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({ config, onUpdate, onSave, onR
                 {activeTab === 'labels' ? 'Text Configuration' : 'Visual Settings'}
             </h2>
             <div className="flex gap-2">
+                <div className="flex gap-1 mr-2 border-r border-gray-200 pr-3">
+                    <button
+                        onClick={onUndo}
+                        disabled={!canUndo}
+                        className={`p-2 rounded-lg transition-colors border ${
+                            canUndo 
+                             ? 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200' 
+                             : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                        }`}
+                        title="Undo (Ctrl+Z)"
+                    >
+                        <Undo className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={onRedo}
+                        disabled={!canRedo}
+                        className={`p-2 rounded-lg transition-colors border ${
+                            canRedo
+                             ? 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200' 
+                             : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                        }`}
+                        title="Redo (Ctrl+Y)"
+                    >
+                        <Redo className="w-4 h-4" />
+                    </button>
+                </div>
+
                 <button
                     onClick={onReset}
                     className="flex items-center px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"

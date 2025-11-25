@@ -197,7 +197,18 @@ const PriceTag: React.FC<PriceTagProps> = ({
   const [justDroppedSection, setJustDroppedSection] = useState<TagSection | null>(null);
 
   const [isResizing, setIsResizing] = useState<null | 'w' | 'h' | 'wh'>(null);
+  const [isSnapped, setIsSnapped] = useState(false); // Visual feedback for snap
+
   const resizeStartRef = useRef<{ x: number, y: number, w: number, h: number, fontScale: number } | null>(null);
+  
+  // Snap State management
+  const snapLocks = useRef<{
+    w: { active: boolean, anchor: number | null, timer: ReturnType<typeof setTimeout> | null, ignoreAnchor: number | null },
+    h: { active: boolean, anchor: number | null, timer: ReturnType<typeof setTimeout> | null, ignoreAnchor: number | null }
+  }>({
+    w: { active: false, anchor: null, timer: null, ignoreAnchor: null },
+    h: { active: false, anchor: null, timer: null, ignoreAnchor: null }
+  });
 
   const sectionOrder = visuals.sectionOrder || ['savings', 'product', 'footer'];
 
@@ -213,9 +224,13 @@ const PriceTag: React.FC<PriceTagProps> = ({
     zoom: visuals.fontScale
   };
 
+  // Fallback defaults to ensure layout stability
+  const currentWidth = visuals.tagWidth || 380;
+  const currentHeight = visuals.tagHeight || 360;
+
   const dimensionStyle: React.CSSProperties = {
-    width: visuals.tagWidth ? `${visuals.tagWidth}px` : '380px',
-    height: visuals.tagHeight ? `${visuals.tagHeight}px` : '360px',
+    width: `${currentWidth}px`,
+    height: `${currentHeight}px`,
     padding: `${layout.basePadding * 0.25}rem`
   };
 
@@ -276,6 +291,66 @@ const PriceTag: React.FC<PriceTagProps> = ({
     };
   };
 
+  // Snap Logic Helper
+  const applySnap = (rawValue: number, axis: 'w' | 'h') => {
+    const SNAP_INCREMENT = 50; 
+    const SNAP_THRESHOLD = 15; // Pixel distance to trigger magnetic snap
+
+    const nearestSnap = Math.round(rawValue / SNAP_INCREMENT) * SNAP_INCREMENT;
+    const dist = Math.abs(rawValue - nearestSnap);
+    const lock = snapLocks.current[axis];
+
+    // Case 1: Currently Locked (Paused)
+    if (lock.active) {
+        // If user pulls HARD (e.g. > 40px away), break lock immediately
+        if (Math.abs(rawValue - lock.anchor!) > 40) {
+            if (lock.timer) clearTimeout(lock.timer);
+            lock.active = false;
+            lock.timer = null;
+            setIsSnapped(false);
+            return rawValue;
+        }
+        return lock.anchor!; // Stay frozen
+    }
+
+    // Case 2: Entering Snap Zone
+    if (dist < SNAP_THRESHOLD) {
+        // Don't re-snap to the same point immediately after the timer expires (allow escape)
+        if (lock.ignoreAnchor === nearestSnap) {
+            return rawValue; 
+        }
+
+        // Engage Snap
+        lock.active = true;
+        lock.anchor = nearestSnap;
+        setIsSnapped(true);
+        
+        // Hold for ~1 second then release
+        lock.timer = setTimeout(() => {
+            lock.active = false;
+            lock.ignoreAnchor = nearestSnap; // Don't snap to this specific point again until we leave zone
+            lock.timer = null;
+            setIsSnapped(false);
+        }, 800); 
+
+        return nearestSnap;
+    }
+
+    // Case 3: Outside Zone
+    if (dist >= SNAP_THRESHOLD) {
+        // Reset ignore list so we can snap there again later if we come back
+        lock.ignoreAnchor = null;
+        if (lock.active) {
+             if (lock.timer) clearTimeout(lock.timer);
+             lock.active = false;
+             setIsSnapped(false);
+        }
+    }
+
+    return rawValue;
+  };
+
+
   useEffect(() => {
     if (!isResizing) return;
 
@@ -291,15 +366,18 @@ const PriceTag: React.FC<PriceTagProps> = ({
       const updates: Partial<TagVisuals> = {};
 
       if (isResizing === 'w') {
-        updates.tagWidth = Math.max(150, startW + dx);
+        const rawW = Math.max(150, startW + dx);
+        updates.tagWidth = applySnap(rawW, 'w');
       } else if (isResizing === 'h') {
-        updates.tagHeight = Math.max(150, startH + dy);
+        const rawH = Math.max(150, startH + dy);
+        updates.tagHeight = applySnap(rawH, 'h');
       } else if (isResizing === 'wh') {
         const newWidth = Math.max(150, startW + dx);
         const ratio = newWidth / startW;
         updates.tagWidth = newWidth;
         updates.tagHeight = Math.max(150, startH * ratio);
         updates.fontScale = Math.max(0.5, startScale * ratio);
+        // We don't snap on proportional scale drag to avoid aspect ratio jumps
       }
 
       onVisualChange(updates);
@@ -307,7 +385,17 @@ const PriceTag: React.FC<PriceTagProps> = ({
 
     const handleMouseUp = () => {
       setIsResizing(null);
+      setIsSnapped(false);
       resizeStartRef.current = null;
+      
+      // Clear any pending snap timers
+      ['w', 'h'].forEach(axis => {
+        const lock = snapLocks.current[axis as 'w'|'h'];
+        if (lock.timer) clearTimeout(lock.timer);
+        lock.active = false;
+        lock.timer = null;
+        lock.ignoreAnchor = null;
+      });
     };
 
     window.addEventListener('mousemove', handleMouseMove);
@@ -401,10 +489,10 @@ const PriceTag: React.FC<PriceTagProps> = ({
     >
       {isResizing && (
         <>
-            <div className="absolute right-0 top-[-1000px] bottom-[-1000px] w-px border-r border-blue-500 border-dashed z-50 pointer-events-none print:hidden opacity-70" />
-            <div className="absolute bottom-0 left-[-1000px] right-[-1000px] h-px border-b border-blue-500 border-dashed z-50 pointer-events-none print:hidden opacity-70" />
-            <div className="absolute bottom-[-28px] right-0 bg-blue-600 text-white text-xs px-2 py-1 rounded shadow-md z-50 whitespace-nowrap font-mono print:hidden">
-                {Math.round(visuals.tagWidth || 380)}px × {Math.round(visuals.tagHeight || 360)}px
+            <div className={`absolute right-0 top-[-1000px] bottom-[-1000px] w-px border-r ${isSnapped ? 'border-green-500 border-2' : 'border-blue-500 border-dashed'} z-50 pointer-events-none print:hidden opacity-70`} />
+            <div className={`absolute bottom-0 left-[-1000px] right-[-1000px] h-px border-b ${isSnapped ? 'border-green-500 border-2' : 'border-blue-500 border-dashed'} z-50 pointer-events-none print:hidden opacity-70`} />
+            <div className={`absolute bottom-[-28px] right-0 ${isSnapped ? 'bg-green-600' : 'bg-blue-600'} text-white text-xs px-2 py-1 rounded shadow-md z-50 whitespace-nowrap font-mono print:hidden transition-colors`}>
+                {Math.round(currentWidth)}px × {Math.round(currentHeight)}px
             </div>
         </>
       )}

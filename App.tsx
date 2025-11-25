@@ -1,10 +1,17 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Product, TagSize, FontTheme, AppConfiguration, TagSection, TagVisuals } from './types';
 import InputForm from './components/InputForm';
 import PriceTag from './components/PriceTag';
 import ConfigPanel from './components/ConfigPanel';
 import { Printer, Settings, LayoutGrid, Type, List } from 'lucide-react';
 import { FONT_THEMES, DEFAULT_CONFIG } from './constants';
+
+// --- History Hook / Logic ---
+interface HistoryState<T> {
+  past: T[];
+  present: T;
+  future: T[];
+}
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'generator' | 'config'>('generator');
@@ -13,13 +20,12 @@ const App: React.FC = () => {
   const [fontTheme, setFontTheme] = useState<FontTheme>('classic');
   const [showSaveToast, setShowSaveToast] = useState(false);
   
-  // State for full app config (labels + visuals)
-  const [appConfig, setAppConfig] = useState<AppConfiguration>(() => {
+  // Initialize state from local storage or default
+  const getInitialConfig = (): AppConfiguration => {
     try {
       const saved = localStorage.getItem('appConfig');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Merge with defaults
         return {
           labels: { ...DEFAULT_CONFIG.labels, ...(parsed.labels || parsed) },
           visuals: { ...DEFAULT_CONFIG.visuals, ...(parsed.visuals || {}) }
@@ -29,7 +35,87 @@ const App: React.FC = () => {
     } catch (e) {
       return DEFAULT_CONFIG;
     }
+  };
+
+  // History State
+  const [history, setHistory] = useState<HistoryState<AppConfiguration>>({
+    past: [],
+    present: getInitialConfig(),
+    future: []
   });
+
+  // Derived current config
+  const appConfig = history.present;
+
+  // History Actions
+  const setAppConfig = useCallback((newConfig: AppConfiguration | ((prev: AppConfiguration) => AppConfiguration)) => {
+    setHistory(curr => {
+      const nextPresent = typeof newConfig === 'function' ? newConfig(curr.present) : newConfig;
+      
+      // Simple deep equality check to prevent history cluttering could go here, 
+      // but relying on React's nature for now.
+      if (JSON.stringify(curr.present) === JSON.stringify(nextPresent)) return curr;
+
+      // Limit history stack size to 50
+      const newPast = [...curr.past, curr.present].slice(-50);
+
+      return {
+        past: newPast,
+        present: nextPresent,
+        future: []
+      };
+    });
+  }, []);
+
+  const handleUndo = useCallback(() => {
+    setHistory(curr => {
+      if (curr.past.length === 0) return curr;
+      const previous = curr.past[curr.past.length - 1];
+      const newPast = curr.past.slice(0, -1);
+      return {
+        past: newPast,
+        present: previous,
+        future: [curr.present, ...curr.future]
+      };
+    });
+  }, []);
+
+  const handleRedo = useCallback(() => {
+    setHistory(curr => {
+      if (curr.future.length === 0) return curr;
+      const next = curr.future[0];
+      const newFuture = curr.future.slice(1);
+      return {
+        past: [...curr.past, curr.present],
+        present: next,
+        future: newFuture
+      };
+    });
+  }, []);
+
+  // Keyboard Shortcuts for Undo/Redo
+  useEffect(() => {
+    if (activeTab !== 'config') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          handleRedo();
+        } else {
+          e.preventDefault();
+          handleUndo();
+        }
+      } else if ((e.metaKey || e.ctrlKey) && e.key === 'y') {
+        e.preventDefault();
+        handleRedo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [activeTab, handleUndo, handleRedo]);
+
 
   const handleSaveConfig = useCallback(() => {
     localStorage.setItem('appConfig', JSON.stringify(appConfig));
@@ -40,9 +126,9 @@ const App: React.FC = () => {
   const handleResetConfig = useCallback(() => {
     if (window.confirm('Are you sure you want to reset all configuration to default?')) {
       setAppConfig(DEFAULT_CONFIG);
-      handleSaveConfig();
+      // We don't auto-save here to let user undo, but we update history
     }
-  }, [handleSaveConfig]);
+  }, [setAppConfig]);
 
   const handleSectionReorder = useCallback((newOrder: TagSection[]) => {
     setAppConfig(prev => ({
@@ -52,7 +138,7 @@ const App: React.FC = () => {
             sectionOrder: newOrder
         }
     }));
-  }, []);
+  }, [setAppConfig]);
 
   const handleAddProduct = useCallback((product: Product) => {
     setProducts((prev) => [...prev, product]);
@@ -337,6 +423,10 @@ const App: React.FC = () => {
               onUpdate={setAppConfig}
               onSave={handleSaveConfig}
               onReset={handleResetConfig}
+              onUndo={handleUndo}
+              onRedo={handleRedo}
+              canUndo={history.past.length > 0}
+              canRedo={history.future.length > 0}
             />
             
             <div className="mt-8 max-w-3xl mx-auto">
