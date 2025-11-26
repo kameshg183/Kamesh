@@ -1,0 +1,16 @@
+
+{
+  "name": "Smart Price Tag Printer",
+  "short_name": "TagPrinter",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/npm/lucide-static@0.344.0/icons/tag.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
