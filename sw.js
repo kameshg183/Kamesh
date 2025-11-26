@@ -1,11 +1,11 @@
-
 const CACHE_NAME = 'smart-price-tag-v1';
 
 // Assets to immediately cache on install
+// Using relative paths './' ensures compatibility with GitHub Pages repositories
 const PRECACHE_URLS = [
-  '/',
-  '/index.html',
-  '/manifest.json'
+  './',
+  './index.html',
+  './manifest.json'
 ];
 
 self.addEventListener('install', (event) => {
