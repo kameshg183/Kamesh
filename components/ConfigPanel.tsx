@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { AppConfiguration, TagLabels, TagVisuals } from '../types';
-import { RotateCcw, Save, Type, Palette, LayoutTemplate, Check, Undo, Redo, Smartphone, Monitor } from 'lucide-react';
+import { AppConfiguration, TagLabels, TagVisuals, SheetSettings } from '../types';
+import { RotateCcw, Save, Type, Palette, LayoutTemplate, Check, Undo, Redo, Smartphone, Monitor, LayoutGrid, Sliders } from 'lucide-react';
 import { DEFAULT_CONFIG } from '../constants';
 
 interface ConfigPanelProps {
@@ -43,6 +43,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     setIsDirty(true);
   };
 
+  const handleSheetSettingChange = (key: keyof SheetSettings, value: number) => {
+    onUpdate({
+      ...config,
+      sheetSettings: { ...config.sheetSettings, [key]: value }
+    });
+    setIsDirty(true);
+  };
+
   const handleOrientationChange = (orientation: 'portrait' | 'landscape') => {
     onUpdate({
         ...config,
@@ -68,10 +76,10 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
   const renderTextScaleSlider = (label: string, id: string) => {
       const val = config.visuals.textScales?.[id] || 1;
       return (
-          <div className="space-y-1">
-              <div className="flex justify-between">
-                  <label className="text-xs font-semibold text-gray-600">{label}</label>
-                  <span className="text-xs text-gray-400 font-mono">{val.toFixed(2)}x</span>
+          <div className="space-y-2">
+              <div className="flex justify-between items-end">
+                  <label className="text-xs font-semibold text-slate-600">{label}</label>
+                  <span className="text-xs text-indigo-600 font-mono bg-indigo-50 px-1.5 py-0.5 rounded">{val.toFixed(2)}x</span>
               </div>
               <input
                   type="range"
@@ -80,80 +88,91 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                   step="0.05"
                   value={val}
                   onChange={(e) => handleTextScaleChange(id, parseFloat(e.target.value))}
-                  className="w-full h-1.5 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                  className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
               />
           </div>
       );
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 max-w-4xl mx-auto flex flex-col md:flex-row overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 max-w-5xl mx-auto flex flex-col md:flex-row overflow-hidden min-h-[600px]">
       
       {/* Sidebar Tabs */}
-      <div className="w-full md:w-64 bg-gray-50 border-r border-gray-100 flex md:flex-col">
-        <div className="p-4 md:border-b border-gray-100 hidden md:block">
-            <h3 className="font-bold text-gray-800">Edit Tag</h3>
-            <p className="text-xs text-gray-500">Customize appearance</p>
+      <div className="w-full md:w-72 bg-slate-50 border-r border-slate-100 flex md:flex-col p-2 gap-1">
+        <div className="p-4 mb-2 hidden md:block">
+            <h3 className="font-bold text-slate-800 text-lg">Settings</h3>
+            <p className="text-xs text-slate-500 mt-1">Customize your tag output</p>
         </div>
         
         <button 
           onClick={() => setActiveTab('labels')}
-          className={`flex-1 md:flex-none flex items-center px-6 py-4 text-sm font-medium transition-colors ${
-            activeTab === 'labels' ? 'bg-white text-blue-600 border-l-4 border-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 border-l-4 border-transparent'
+          className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+            activeTab === 'labels' 
+            ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50' 
+            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
           }`}
         >
-          <Type className="w-4 h-4 mr-3" />
+          <Type className={`w-4 h-4 mr-3 ${activeTab === 'labels' ? 'text-indigo-500' : 'text-slate-400'}`} />
           Text Labels
+          {activeTab === 'labels' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500"></div>}
         </button>
         
         <button 
           onClick={() => setActiveTab('visuals')}
-          className={`flex-1 md:flex-none flex items-center px-6 py-4 text-sm font-medium transition-colors ${
-            activeTab === 'visuals' ? 'bg-white text-blue-600 border-l-4 border-blue-600 shadow-sm' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900 border-l-4 border-transparent'
+          className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all ${
+            activeTab === 'visuals' 
+            ? 'bg-white text-indigo-700 shadow-sm border border-slate-200/50' 
+            : 'text-slate-500 hover:bg-slate-100 hover:text-slate-900'
           }`}
         >
-          <Palette className="w-4 h-4 mr-3" />
+          <Palette className={`w-4 h-4 mr-3 ${activeTab === 'visuals' ? 'text-indigo-500' : 'text-slate-400'}`} />
           Visual Style
+          {activeTab === 'visuals' && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-500"></div>}
         </button>
       </div>
 
       {/* Main Content Area */}
-      <div className="flex-1 p-6 md:p-8">
-        <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
-                {activeTab === 'labels' ? 'Text Configuration' : 'Visual Settings'}
-            </h2>
-            <div className="flex gap-2">
-                <div className="flex gap-1 mr-2 border-r border-gray-200 pr-3">
+      <div className="flex-1 p-8 overflow-y-auto">
+        <div className="flex justify-between items-center mb-8 pb-4 border-b border-slate-100">
+            <div>
+                <h2 className="text-2xl font-bold text-slate-800">
+                    {activeTab === 'labels' ? 'Text Configuration' : 'Visual Settings'}
+                </h2>
+                <p className="text-sm text-slate-400 mt-1">
+                    {activeTab === 'labels' ? 'Define global labels for your tags.' : 'Adjust dimensions, spacing and scaling.'}
+                </p>
+            </div>
+            <div className="flex gap-3">
+                <div className="flex gap-1 mr-2 border-r border-slate-100 pr-4">
                     <button
                         onClick={onUndo}
                         disabled={!canUndo}
-                        className={`p-2 rounded-lg transition-colors border ${
+                        className={`p-2 rounded-lg transition-colors ${
                             canUndo 
-                             ? 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200' 
-                             : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                             ? 'text-slate-600 hover:bg-slate-100' 
+                             : 'text-slate-300 cursor-not-allowed'
                         }`}
-                        title="Undo (Ctrl+Z)"
+                        title="Undo"
                     >
-                        <Undo className="w-4 h-4" />
+                        <Undo className="w-5 h-5" />
                     </button>
                     <button
                         onClick={onRedo}
                         disabled={!canRedo}
-                        className={`p-2 rounded-lg transition-colors border ${
+                        className={`p-2 rounded-lg transition-colors ${
                             canRedo
-                             ? 'bg-white text-gray-700 hover:bg-gray-50 border-gray-200' 
-                             : 'bg-gray-50 text-gray-300 border-transparent cursor-not-allowed'
+                             ? 'text-slate-600 hover:bg-slate-100' 
+                             : 'text-slate-300 cursor-not-allowed'
                         }`}
-                        title="Redo (Ctrl+Y)"
+                        title="Redo"
                     >
-                        <Redo className="w-4 h-4" />
+                        <Redo className="w-5 h-5" />
                     </button>
                 </div>
 
                 <button
                     onClick={onReset}
-                    className="flex items-center px-3 py-2 text-sm text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
+                    className="flex items-center px-4 py-2 text-sm text-slate-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors font-medium"
                     title="Reset All to Defaults"
                 >
                     <RotateCcw className="w-4 h-4 mr-2" />
@@ -162,7 +181,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                 <button
                     onClick={handleSave}
                     className={`flex items-center px-6 py-2 text-sm font-bold text-white rounded-lg transition-all shadow-md ${
-                        isDirty ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-400'
+                        isDirty ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-slate-300 cursor-default'
                     }`}
                     title="Save Configuration"
                 >
@@ -173,54 +192,54 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         </div>
 
         {activeTab === 'labels' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fadeIn">
-            <div className="space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">Currency Symbol</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Currency Symbol</label>
               <input
                 type="text"
                 value={config.labels.currency}
                 onChange={(e) => handleLabelChange('currency', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 placeholder="₹"
               />
             </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">Discount Label</label>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Discount Label</label>
               <input
                 type="text"
                 value={config.labels.offLabel}
                 onChange={(e) => handleLabelChange('offLabel', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Off"
               />
             </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">MRP Label</label>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">MRP Label</label>
               <input
                 type="text"
                 value={config.labels.mrpLabel}
                 onChange={(e) => handleLabelChange('mrpLabel', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 placeholder="MRP"
               />
             </div>
-            <div className="space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">Price Label</label>
+            <div className="space-y-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">Price Label</label>
               <input
                 type="text"
                 value={config.labels.priceLabel}
                 onChange={(e) => handleLabelChange('priceLabel', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Our Price"
               />
             </div>
-             <div className="md:col-span-2 space-y-1">
-              <label className="block text-sm font-semibold text-gray-700">No Discount Label</label>
+             <div className="md:col-span-2 space-y-2">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider">No Discount Label</label>
               <input
                 type="text"
                 value={config.labels.bestPriceLabel}
                 onChange={(e) => handleLabelChange('bestPriceLabel', e.target.value)}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 placeholder="Best Price"
               />
             </div>
@@ -228,50 +247,94 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
         )}
 
         {activeTab === 'visuals' && (
-          <div className="space-y-8 animate-fadeIn">
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
              {/* Paper Orientation */}
-             <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                <div className="mb-3">
-                    <label className="font-semibold text-gray-800 flex items-center">
-                        <LayoutTemplate className="w-4 h-4 mr-2 text-gray-500" />
+             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="mb-4">
+                    <label className="font-bold text-slate-800 flex items-center">
+                        <LayoutTemplate className="w-4 h-4 mr-2 text-indigo-500" />
                         Paper Orientation
                     </label>
-                    <p className="text-xs text-gray-500 mt-1">Select the paper layout for printing.</p>
+                    <p className="text-xs text-slate-500 mt-1">Select the paper layout for printing.</p>
                 </div>
                 <div className="flex gap-4">
                     <button
                         onClick={() => handleOrientationChange('portrait')}
-                        className={`flex-1 p-4 rounded-lg border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                        className={`flex-1 p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all ${
                             config.paperOrientation === 'portrait' || !config.paperOrientation
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 bg-white hover:border-blue-300'
+                            ? 'border-indigo-500 bg-white shadow-md text-indigo-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200'
                         }`}
                     >
-                        <Smartphone className="w-6 h-6" />
-                        <span className="font-medium text-sm">Portrait</span>
+                        <Smartphone className="w-8 h-8 opacity-80" strokeWidth={1.5} />
+                        <span className="font-semibold text-sm">Portrait</span>
                     </button>
                     <button
                         onClick={() => handleOrientationChange('landscape')}
-                        className={`flex-1 p-4 rounded-lg border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                        className={`flex-1 p-4 rounded-xl border-2 flex flex-col items-center justify-center gap-3 transition-all ${
                             config.paperOrientation === 'landscape'
-                            ? 'border-blue-500 bg-blue-50 text-blue-700'
-                            : 'border-gray-200 bg-white hover:border-blue-300'
+                            ? 'border-indigo-500 bg-white shadow-md text-indigo-700'
+                            : 'border-slate-200 bg-white text-slate-500 hover:border-indigo-200'
                         }`}
                     >
-                        <Monitor className="w-6 h-6" />
-                        <span className="font-medium text-sm">Landscape</span>
+                        <Monitor className="w-8 h-8 opacity-80" strokeWidth={1.5} />
+                        <span className="font-semibold text-sm">Landscape</span>
                     </button>
                 </div>
              </div>
 
-             {/* Spacing Control */}
-             <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                <div className="flex justify-between items-center mb-2">
-                    <label className="font-semibold text-gray-800 flex items-center">
-                        <LayoutTemplate className="w-4 h-4 mr-2 text-gray-500" />
-                        Section Spacing (Drag to Move Lines)
+             {/* Sheet Layout (Gaps) */}
+             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="mb-4">
+                    <label className="font-bold text-slate-800 flex items-center">
+                        <LayoutGrid className="w-4 h-4 mr-2 text-indigo-500" />
+                        Sheet Layout & Gaps
                     </label>
-                    <span className="text-sm text-gray-500 font-mono">{config.visuals.sectionSpacing}x</span>
+                    <p className="text-xs text-slate-500 mt-1">Adjust spacing between tags on the print sheet.</p>
+                </div>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div>
+                        <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-semibold text-slate-600">Horizontal Gap</label>
+                            <span className="text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200 text-slate-600">{config.sheetSettings.gapX}cm</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="2" 
+                            step="0.1"
+                            value={config.sheetSettings.gapX}
+                            onChange={(e) => handleSheetSettingChange('gapX', parseFloat(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                        />
+                    </div>
+                    <div>
+                         <div className="flex justify-between items-center mb-2">
+                            <label className="text-sm font-semibold text-slate-600">Vertical Gap</label>
+                            <span className="text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200 text-slate-600">{config.sheetSettings.gapY}cm</span>
+                        </div>
+                        <input 
+                            type="range" 
+                            min="0" 
+                            max="2" 
+                            step="0.1"
+                            value={config.sheetSettings.gapY}
+                            onChange={(e) => handleSheetSettingChange('gapY', parseFloat(e.target.value))}
+                            className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+                        />
+                    </div>
+                </div>
+             </div>
+
+             {/* Spacing Control */}
+             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                    <label className="font-bold text-slate-800 flex items-center">
+                        <LayoutTemplate className="w-4 h-4 mr-2 text-indigo-500" />
+                        Internal Section Spacing
+                    </label>
+                    <span className="text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200 text-slate-600">{config.visuals.sectionSpacing}x</span>
                 </div>
                 <input 
                     type="range" 
@@ -280,19 +343,18 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     step="0.5"
                     value={config.visuals.sectionSpacing}
                     onChange={(e) => handleVisualChange('sectionSpacing', parseFloat(e.target.value))}
-                    className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                 />
-                <p className="text-xs text-gray-500 mt-2">Adjusting this slider moves the separator lines up or down by changing padding.</p>
              </div>
 
              {/* Font Scale Control */}
-             <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                <div className="flex justify-between items-center mb-2">
-                    <label className="font-semibold text-gray-800 flex items-center">
-                        <Type className="w-4 h-4 mr-2 text-gray-500" />
+             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="flex justify-between items-center mb-3">
+                    <label className="font-bold text-slate-800 flex items-center">
+                        <Type className="w-4 h-4 mr-2 text-indigo-500" />
                         Global Content Scale
                     </label>
-                    <span className="text-sm text-gray-500 font-mono">{Math.round(config.visuals.fontScale * 100)}%</span>
+                    <span className="text-xs font-mono bg-white px-2 py-1 rounded border border-slate-200 text-slate-600">{Math.round(config.visuals.fontScale * 100)}%</span>
                 </div>
                 <input 
                     type="range" 
@@ -301,22 +363,21 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     step="0.05"
                     value={config.visuals.fontScale}
                     onChange={(e) => handleVisualChange('fontScale', parseFloat(e.target.value))}
-                    className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                    className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                 />
-                <p className="text-xs text-gray-500 mt-2">Scales all text inside the tag proportionally.</p>
              </div>
 
              {/* Specific Element Sizes */}
-             <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                <div className="mb-3">
-                    <label className="font-semibold text-gray-800 flex items-center">
-                        <Type className="w-4 h-4 mr-2 text-gray-500" />
-                        Specific Element Sizes
+             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                <div className="mb-6">
+                    <label className="font-bold text-slate-800 flex items-center">
+                        <Sliders className="w-4 h-4 mr-2 text-indigo-500" />
+                        Fine-Tune Element Sizes
                     </label>
-                    <p className="text-xs text-gray-500 mt-1">Fine-tune the size of specific text elements relative to the base size.</p>
+                    <p className="text-xs text-slate-500 mt-1">Adjust specific text elements relative to the base size.</p>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
                     {renderTextScaleSlider("Product Name", "name")}
                     {renderTextScaleSlider("Price (Our Price)", "price")}
                     {renderTextScaleSlider("Label: Our Price", "labelPrice")}
@@ -331,11 +392,11 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
              {/* Line Styles */}
              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Line Type</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Separator Line Type</label>
                     <select 
                         value={config.visuals.separatorStyle}
                         onChange={(e) => handleVisualChange('separatorStyle', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        className="w-full px-4 py-2 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none bg-white"
                     >
                         <option value="dashed">Dashed</option>
                         <option value="solid">Solid</option>
@@ -344,7 +405,7 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                     </select>
                 </div>
                 <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Line Thickness</label>
+                    <label className="block text-sm font-semibold text-slate-700 mb-2">Separator Thickness</label>
                     <div className="flex items-center gap-4">
                         <input 
                             type="range" 
@@ -352,9 +413,9 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
                             max="6" 
                             value={config.visuals.separatorThickness}
                             onChange={(e) => handleVisualChange('separatorThickness', parseInt(e.target.value))}
-                            className="flex-1 h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                            className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-indigo-600"
                         />
-                        <span className="text-sm font-mono w-8">{config.visuals.separatorThickness}px</span>
+                        <span className="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">{config.visuals.separatorThickness}px</span>
                     </div>
                 </div>
              </div>

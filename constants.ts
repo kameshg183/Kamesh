@@ -45,6 +45,12 @@ export const DEFAULT_VISUALS: TagVisuals = {
 export const DEFAULT_CONFIG: AppConfiguration = {
   labels: DEFAULT_TAG_LABELS,
   visuals: DEFAULT_VISUALS,
+  sheetSettings: {
+    paddingX: 0.25, // 1cm Left/Right Margin
+    paddingY: 1.0, // 1cm Top/Bottom Margin
+    gapX: 0.05, // Reduced to 0.1cm (1mm)
+    gapY: 0.1  // Reduced to 0.1cm (1mm)
+  },
   paperOrientation: 'portrait',
   pageOrientations: {}
 };

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Smart Price Tag Printer</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Slab:wght@400;700;900&family=Inter:wght@400;500;600&family=Oswald:wght@500;700&family=Open+Sans:wght@400;600&family=Playfair+Display:wght@700;900&family=Lato:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Slab:wght@400;700&family=Oswald:wght@500;700&family=Playfair+Display:wght@700;900&family=Lato:wght@400;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         theme: {
@@ -14,7 +14,6 @@
               sans: ['Inter', 'sans-serif'],
               serif: ['Roboto Slab', 'serif'],
               oswald: ['Oswald', 'sans-serif'],
-              opensans: ['Open Sans', 'sans-serif'],
               playfair: ['Playfair Display', 'serif'],
               lato: ['Lato', 'sans-serif'],
             },
@@ -26,6 +25,27 @@
       }
     </script>
     <style>
+      body {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      
+      /* Modern Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+
       @media print {
         @page {
           size: A4;
@@ -55,7 +75,7 @@
 }
 </script>
 </head>
-  <body class="bg-gray-50 text-gray-900">
+  <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
   </body>
 </html>

@@ -48,9 +48,17 @@ export interface TagVisuals {
   layoutDirection?: 'row' | 'col'; // Content flow direction
 }
 
+export interface SheetSettings {
+  paddingX: number; // Horizontal margin (symmetric left/right) in CM
+  paddingY: number; // Vertical margin (symmetric top/bottom) in CM
+  gapX: number; // Horizontal gap between items in CM
+  gapY: number; // Vertical gap between items in CM
+}
+
 export interface AppConfiguration {
   labels: TagLabels;
   visuals: TagVisuals;
+  sheetSettings: SheetSettings;
   paperOrientation?: 'portrait' | 'landscape';
   pageOrientations?: Record<number, 'portrait' | 'landscape'>; // Per-page override
 }
