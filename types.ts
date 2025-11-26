@@ -12,9 +12,9 @@ export interface CSVParsedRow {
 }
 
 export enum TagSize {
-  SMALL = 'small', // 3x5 grid approx
-  MEDIUM = 'medium', // 2x4 grid approx
-  LARGE = 'large' // 2x3 grid approx
+  SMALL = 'small', 
+  MEDIUM = 'medium', 
+  LARGE = 'large' 
 }
 
 export type FontTheme = 'classic' | 'modern' | 'elegant';
@@ -35,12 +35,22 @@ export interface TagVisuals {
   separatorThickness: number; // 1 to 5px
   sectionSpacing: number; // Padding/Margin multiplier
   sectionOrder: TagSection[];
-  tagWidth?: number;
+  
+  // Dimensions in CENTIMETERS
+  tagWidth?: number; 
   tagHeight?: number;
+  
+  // Padding in CENTIMETERS (controlled by Ruler)
+  paddingX?: number;
+  paddingY?: number;
+
   textScales?: Record<string, number>; // ID-based font scales
+  layoutDirection?: 'row' | 'col'; // Content flow direction
 }
 
 export interface AppConfiguration {
   labels: TagLabels;
   visuals: TagVisuals;
+  paperOrientation?: 'portrait' | 'landscape';
+  pageOrientations?: Record<number, 'portrait' | 'landscape'>; // Per-page override
 }

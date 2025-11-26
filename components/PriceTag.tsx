@@ -1,8 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Product, TagSize, FontTheme, AppConfiguration, TagSection, TagVisuals } from '../types';
-import { FONT_THEMES } from '../constants';
-import { Minus, Plus, X } from 'lucide-react';
+import { FONT_THEMES, PX_PER_CM } from '../constants';
+import { Minus, Plus, X, RotateCw, Columns, Rows } from 'lucide-react';
 
 interface PriceTagProps {
   product: Product;
@@ -18,8 +18,7 @@ interface PriceTagProps {
 
 const LAYOUT_CONFIG = {
   [TagSize.SMALL]: {
-    container: 'h-[280px]',
-    basePadding: 2,
+    baseFontSize: 0.8,
     savings: {
       amount: 'text-4xl',
       symbol: 'text-lg',
@@ -36,8 +35,7 @@ const LAYOUT_CONFIG = {
     }
   },
   [TagSize.MEDIUM]: {
-    container: 'h-[360px]',
-    basePadding: 3,
+    baseFontSize: 1,
     savings: {
       amount: 'text-[4.5rem]',
       symbol: 'text-2xl',
@@ -54,8 +52,7 @@ const LAYOUT_CONFIG = {
     }
   },
   [TagSize.LARGE]: {
-    container: 'h-[500px]',
-    basePadding: 4,
+    baseFontSize: 1.2,
     savings: {
       amount: 'text-[7rem]',
       symbol: 'text-3xl',
@@ -71,6 +68,131 @@ const LAYOUT_CONFIG = {
       price: 'text-6xl'
     }
   }
+};
+
+// --- Ruler Component ---
+interface RulerProps {
+    length: number; // in cm
+    orientation: 'horizontal' | 'vertical';
+    padding: number; // current padding in cm
+    onPaddingChange: (newPadding: number) => void;
+}
+
+const Ruler: React.FC<RulerProps> = ({ length, orientation, padding, onPaddingChange }) => {
+    const isHorz = orientation === 'horizontal';
+    const ticks = Array.from({ length: Math.ceil(length) + 1 });
+    const isDragging = useRef(false);
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        isDragging.current = true;
+        
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startPadding = padding;
+
+        const handleMouseMove = (mv: MouseEvent) => {
+            if (!isDragging.current) return;
+            let delta = 0;
+            if (isHorz) {
+                delta = (mv.clientX - startX) / PX_PER_CM;
+            } else {
+                delta = (mv.clientY - startY) / PX_PER_CM;
+            }
+            // Clamp padding between 0 and length/2
+            const newPadding = Math.max(0, Math.min(length / 2 - 0.5, startPadding + delta));
+            onPaddingChange(newPadding);
+        };
+
+        const handleMouseUp = () => {
+            isDragging.current = false;
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+    };
+
+    return (
+        <div 
+            className={`absolute bg-white/90 border-gray-300 z-30 select-none print:hidden transition-opacity duration-200
+            ${isHorz ? 'h-5 top-0 left-0 right-0 border-b flex' : 'w-5 top-0 left-0 bottom-0 border-r block'}`}
+            style={{ 
+                opacity: 0, 
+            }}
+            // Visible via CSS on parent hover
+        >
+            {/* Ticks */}
+            {ticks.map((_, i) => (
+                <div 
+                    key={i} 
+                    className="absolute bg-gray-400 text-[8px] flex justify-center items-center font-mono text-gray-500"
+                    style={isHorz ? {
+                        left: `${(i / length) * 100}%`,
+                        height: '100%',
+                        width: '1px',
+                        borderLeft: '1px solid #ccc'
+                    } : {
+                        top: `${(i / length) * 100}%`,
+                        width: '100%',
+                        height: '1px',
+                        borderTop: '1px solid #ccc'
+                    }}
+                >
+                    <span className="bg-white/80 px-0.5">{i > 0 ? i : ''}</span>
+                </div>
+            ))}
+
+            {/* Margin Start Marker (Draggable) */}
+            <div 
+                className={`absolute bg-blue-500 cursor-pointer hover:bg-blue-600 transition-colors shadow-sm z-40`}
+                style={isHorz ? {
+                    left: `${(padding / length) * 100}%`,
+                    top: 0,
+                    bottom: 0,
+                    width: '4px',
+                } : {
+                    top: `${(padding / length) * 100}%`,
+                    left: 0,
+                    right: 0,
+                    height: '4px'
+                }}
+                onMouseDown={handleMouseDown}
+                title="Drag to adjust margin"
+            />
+             {/* Margin Area Visualization */}
+            <div 
+                 className="absolute bg-gray-200/50 pointer-events-none"
+                 style={isHorz ? {
+                     left: 0,
+                     width: `${(padding / length) * 100}%`,
+                     height: '100%'
+                 } : {
+                     top: 0,
+                     height: `${(padding / length) * 100}%`,
+                     width: '100%'
+                 }}
+            />
+            
+            {/* End Margin Marker (Mirror for visualization only atm) */}
+             <div 
+                className={`absolute bg-gray-300 pointer-events-none opacity-50`}
+                style={isHorz ? {
+                    right: `${(padding / length) * 100}%`,
+                    top: 0,
+                    bottom: 0,
+                    width: '1px',
+                } : {
+                    bottom: `${(padding / length) * 100}%`,
+                    left: 0,
+                    right: 0,
+                    height: '1px'
+                }}
+            />
+        </div>
+    );
 };
 
 // --- Helper Component for Individual Text Scaling ---
@@ -181,12 +303,22 @@ const PriceTag: React.FC<PriceTagProps> = ({
   enableDnD = false,
   onOrderChange,
   onVisualChange,
-  width,
-  height
 }) => {
   const labels = config.labels;
-  const visuals = product.customVisuals ? { ...config.visuals, ...product.customVisuals } : config.visuals;
+  const productCustoms = product.customVisuals || {};
+  
+  // Local preview state for smooth resizing without layout thrashing
+  const [previewVisuals, setPreviewVisuals] = useState<Partial<TagVisuals> | null>(null);
+
+  // Computed visuals merging config, product defaults, and active resize preview
+  const visuals = useMemo(() => {
+    const base = { ...config.visuals, ...productCustoms };
+    return previewVisuals ? { ...base, ...previewVisuals } : base;
+  }, [config.visuals, productCustoms, previewVisuals]);
+
   const textScales = visuals.textScales || {};
+  const layoutDirection = visuals.layoutDirection || 'col';
+  const isRowLayout = layoutDirection === 'row';
 
   const savings = product.mrp - product.price;
   const hasSavings = savings > 0;
@@ -197,11 +329,10 @@ const PriceTag: React.FC<PriceTagProps> = ({
   const [justDroppedSection, setJustDroppedSection] = useState<TagSection | null>(null);
 
   const [isResizing, setIsResizing] = useState<null | 'w' | 'h' | 'wh'>(null);
-  const [isSnapped, setIsSnapped] = useState(false); // Visual feedback for snap
+  const [isSnapped, setIsSnapped] = useState(false);
 
   const resizeStartRef = useRef<{ x: number, y: number, w: number, h: number, fontScale: number } | null>(null);
   
-  // Snap State management
   const snapLocks = useRef<{
     w: { active: boolean, anchor: number | null, timer: ReturnType<typeof setTimeout> | null, ignoreAnchor: number | null },
     h: { active: boolean, anchor: number | null, timer: ReturnType<typeof setTimeout> | null, ignoreAnchor: number | null }
@@ -212,7 +343,13 @@ const PriceTag: React.FC<PriceTagProps> = ({
 
   const sectionOrder = visuals.sectionOrder || ['savings', 'product', 'footer'];
 
-  const separatorStyle: React.CSSProperties = {
+  const separatorStyle: React.CSSProperties = isRowLayout ? {
+    borderRightWidth: `${visuals.separatorThickness}px`,
+    borderRightStyle: visuals.separatorStyle,
+    borderColor: '#111827',
+    marginRight: `${visuals.sectionSpacing * 0.25}rem`,
+    paddingRight: `${visuals.sectionSpacing * 0.25}rem`
+  } : {
     borderBottomWidth: `${visuals.separatorThickness}px`,
     borderBottomStyle: visuals.separatorStyle,
     borderColor: '#111827',
@@ -224,14 +361,19 @@ const PriceTag: React.FC<PriceTagProps> = ({
     zoom: visuals.fontScale
   };
 
-  // Fallback defaults to ensure layout stability
-  const currentWidth = visuals.tagWidth || 380;
-  const currentHeight = visuals.tagHeight || 360;
+  // Dimensions in CM
+  const currentWidth = visuals.tagWidth || 10;
+  const currentHeight = visuals.tagHeight || 7.5;
+  const currentPaddingX = visuals.paddingX || 0.5;
+  const currentPaddingY = visuals.paddingY || 0.5;
 
   const dimensionStyle: React.CSSProperties = {
-    width: `${currentWidth}px`,
-    height: `${currentHeight}px`,
-    padding: `${layout.basePadding * 0.25}rem`
+    width: `${currentWidth}cm`,
+    height: `${currentHeight}cm`,
+    paddingLeft: `${currentPaddingX}cm`,
+    paddingRight: `${currentPaddingX}cm`,
+    paddingTop: `${currentPaddingY}cm`,
+    paddingBottom: `${currentPaddingY}cm`,
   };
 
   // --- Handlers ---
@@ -242,6 +384,25 @@ const PriceTag: React.FC<PriceTagProps> = ({
         textScales: { ...textScales, [id]: newScale } 
       });
     }
+  };
+
+  const handleSwapDimensions = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onVisualChange) return;
+
+    onVisualChange({
+      tagWidth: currentHeight,
+      tagHeight: currentWidth
+    });
+  };
+
+  const handleToggleLayout = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onVisualChange) return;
+    
+    onVisualChange({
+        layoutDirection: isRowLayout ? 'col' : 'row'
+    });
   };
 
   const handleDragStart = (e: React.DragEvent, section: TagSection) => {
@@ -285,60 +446,52 @@ const PriceTag: React.FC<PriceTagProps> = ({
     resizeStartRef.current = {
       x: e.clientX,
       y: e.clientY,
-      w: visuals.tagWidth || 380,
-      h: visuals.tagHeight || 360,
+      w: currentWidth, // in CM
+      h: currentHeight, // in CM
       fontScale: visuals.fontScale || 1
     };
   };
 
-  // Snap Logic Helper
   const applySnap = (rawValue: number, axis: 'w' | 'h') => {
-    const SNAP_INCREMENT = 50; 
-    const SNAP_THRESHOLD = 15; // Pixel distance to trigger magnetic snap
+    // Snap to nearest 0.5 CM
+    const SNAP_INCREMENT = 0.5; 
+    const SNAP_THRESHOLD = 0.4; // 0.4 CM threshold
 
     const nearestSnap = Math.round(rawValue / SNAP_INCREMENT) * SNAP_INCREMENT;
     const dist = Math.abs(rawValue - nearestSnap);
     const lock = snapLocks.current[axis];
 
-    // Case 1: Currently Locked (Paused)
     if (lock.active) {
-        // If user pulls HARD (e.g. > 40px away), break lock immediately
-        if (Math.abs(rawValue - lock.anchor!) > 40) {
+        if (Math.abs(rawValue - lock.anchor!) > 1.0) { // break lock if pulled away by 1cm
             if (lock.timer) clearTimeout(lock.timer);
             lock.active = false;
             lock.timer = null;
             setIsSnapped(false);
             return rawValue;
         }
-        return lock.anchor!; // Stay frozen
+        return lock.anchor!; 
     }
 
-    // Case 2: Entering Snap Zone
     if (dist < SNAP_THRESHOLD) {
-        // Don't re-snap to the same point immediately after the timer expires (allow escape)
         if (lock.ignoreAnchor === nearestSnap) {
             return rawValue; 
         }
 
-        // Engage Snap
         lock.active = true;
         lock.anchor = nearestSnap;
         setIsSnapped(true);
         
-        // Hold for ~1 second then release
         lock.timer = setTimeout(() => {
             lock.active = false;
-            lock.ignoreAnchor = nearestSnap; // Don't snap to this specific point again until we leave zone
+            lock.ignoreAnchor = nearestSnap; 
             lock.timer = null;
             setIsSnapped(false);
-        }, 800); 
+        }, 600); 
 
         return nearestSnap;
     }
 
-    // Case 3: Outside Zone
     if (dist >= SNAP_THRESHOLD) {
-        // Reset ignore list so we can snap there again later if we come back
         lock.ignoreAnchor = null;
         if (lock.active) {
              if (lock.timer) clearTimeout(lock.timer);
@@ -355,10 +508,15 @@ const PriceTag: React.FC<PriceTagProps> = ({
     if (!isResizing) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      if (!resizeStartRef.current || !onVisualChange) return;
+      if (!resizeStartRef.current) return;
       
-      const dx = e.clientX - resizeStartRef.current.x;
-      const dy = e.clientY - resizeStartRef.current.y;
+      const dxPx = e.clientX - resizeStartRef.current.x;
+      const dyPx = e.clientY - resizeStartRef.current.y;
+      
+      // Convert pixel delta to CM delta
+      const dxCm = dxPx / PX_PER_CM;
+      const dyCm = dyPx / PX_PER_CM;
+
       const startW = resizeStartRef.current.w;
       const startH = resizeStartRef.current.h;
       const startScale = resizeStartRef.current.fontScale;
@@ -366,29 +524,32 @@ const PriceTag: React.FC<PriceTagProps> = ({
       const updates: Partial<TagVisuals> = {};
 
       if (isResizing === 'w') {
-        const rawW = Math.max(150, startW + dx);
+        const rawW = Math.max(3, startW + dxCm); // Min 3cm
         updates.tagWidth = applySnap(rawW, 'w');
       } else if (isResizing === 'h') {
-        const rawH = Math.max(150, startH + dy);
+        const rawH = Math.max(3, startH + dyCm); // Min 3cm
         updates.tagHeight = applySnap(rawH, 'h');
       } else if (isResizing === 'wh') {
-        const newWidth = Math.max(150, startW + dx);
+        const newWidth = Math.max(3, startW + dxCm);
         const ratio = newWidth / startW;
         updates.tagWidth = newWidth;
-        updates.tagHeight = Math.max(150, startH * ratio);
+        updates.tagHeight = Math.max(3, startH * ratio);
         updates.fontScale = Math.max(0.5, startScale * ratio);
-        // We don't snap on proportional scale drag to avoid aspect ratio jumps
       }
-
-      onVisualChange(updates);
+      
+      setPreviewVisuals(updates);
     };
 
     const handleMouseUp = () => {
+      if (onVisualChange && previewVisuals) {
+         onVisualChange(previewVisuals);
+      }
+      
+      setPreviewVisuals(null);
       setIsResizing(null);
       setIsSnapped(false);
       resizeStartRef.current = null;
       
-      // Clear any pending snap timers
       ['w', 'h'].forEach(axis => {
         const lock = snapLocks.current[axis as 'w'|'h'];
         if (lock.timer) clearTimeout(lock.timer);
@@ -405,13 +566,13 @@ const PriceTag: React.FC<PriceTagProps> = ({
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [isResizing, onVisualChange]);
+  }, [isResizing, onVisualChange, previewVisuals]);
 
 
   // --- Renderers ---
 
   const renderSavings = () => (
-    <div className={`flex-shrink-0 flex flex-col justify-center items-center cursor-move w-full overflow-hidden min-h-0`}>
+    <div className={`flex-shrink-0 flex flex-col justify-center items-center cursor-move overflow-hidden min-h-0 ${isRowLayout ? 'h-full w-auto px-2' : 'w-full'}`}>
       {hasSavings ? (
         <div className="text-center w-full min-w-0">
           <div className={`flex items-baseline justify-center ${theme.priceClass} font-black leading-none flex-wrap`}>
@@ -433,7 +594,7 @@ const PriceTag: React.FC<PriceTagProps> = ({
   );
 
   const renderProduct = () => (
-    <div className="flex-1 flex flex-col justify-center items-center text-center px-1 min-h-0 cursor-move w-full overflow-hidden">
+    <div className={`flex-1 flex flex-col justify-center items-center text-center px-1 min-h-0 cursor-move overflow-hidden ${isRowLayout ? 'h-full' : 'w-full'}`}>
       <EditableText id="name" scale={textScales['name'] || 1} onUpdateScale={handleTextScaleUpdate} className="w-full">
         <h2 className={`${theme.nameClass} font-bold ${layout.product.name} mb-2 tracking-wide break-words w-full`}>
             {product.name}
@@ -449,9 +610,9 @@ const PriceTag: React.FC<PriceTagProps> = ({
   );
 
   const renderFooter = () => (
-    <div className={`flex-shrink-0 cursor-move w-full overflow-hidden min-h-0`}>
-      <div className="flex justify-between items-end w-full">
-        <div className="text-center px-1">
+    <div className={`flex-shrink-0 cursor-move overflow-hidden min-h-0 ${isRowLayout ? 'h-full w-auto px-2 flex flex-col justify-center' : 'w-full'}`}>
+      <div className={`flex ${isRowLayout ? 'flex-col gap-2 items-center text-center' : 'justify-between items-end w-full'}`}>
+        <div className={`${isRowLayout ? 'text-center' : 'text-center px-1'}`}>
           <EditableText id="labelMrp" scale={textScales['labelMrp'] || 1} onUpdateScale={handleTextScaleUpdate}>
              <div className={`${theme.metaClass} text-black font-bold uppercase ${layout.footer.label} mb-1`}>{labels.mrpLabel}</div>
           </EditableText>
@@ -462,7 +623,7 @@ const PriceTag: React.FC<PriceTagProps> = ({
           </EditableText>
         </div>
         
-        <div className="text-right px-1">
+        <div className={`${isRowLayout ? 'text-center' : 'text-right px-1'}`}>
           <EditableText id="labelPrice" scale={textScales['labelPrice'] || 1} onUpdateScale={handleTextScaleUpdate}>
              <div className={`${theme.metaClass} text-black font-bold uppercase ${layout.footer.label} mb-1`}>{labels.priceLabel}</div>
           </EditableText>
@@ -484,21 +645,52 @@ const PriceTag: React.FC<PriceTagProps> = ({
 
   return (
     <div 
-      className={`relative flex flex-col break-inside-avoid print:break-inside-avoid box-border group/tag`}
+      className={`relative flex flex-col break-inside-avoid print:break-inside-avoid box-border group/tag select-none`}
       style={dimensionStyle}
     >
+        {/* Rulers (Visible on hover via CSS) */}
+        {onVisualChange && (
+            <>
+                <div className="absolute top-0 left-0 w-full opacity-0 group-hover/tag:opacity-100 transition-opacity">
+                    <Ruler 
+                        length={currentWidth} 
+                        orientation="horizontal" 
+                        padding={currentPaddingX} 
+                        onPaddingChange={(val) => onVisualChange({ paddingX: val })} 
+                    />
+                </div>
+                <div className="absolute top-0 left-0 h-full opacity-0 group-hover/tag:opacity-100 transition-opacity">
+                    <Ruler 
+                        length={currentHeight} 
+                        orientation="vertical" 
+                        padding={currentPaddingY} 
+                        onPaddingChange={(val) => onVisualChange({ paddingY: val })} 
+                    />
+                </div>
+            </>
+        )}
+
+      {/* Resize Overlay */}
       {isResizing && (
         <>
             <div className={`absolute right-0 top-[-1000px] bottom-[-1000px] w-px border-r ${isSnapped ? 'border-green-500 border-2' : 'border-blue-500 border-dashed'} z-50 pointer-events-none print:hidden opacity-70`} />
             <div className={`absolute bottom-0 left-[-1000px] right-[-1000px] h-px border-b ${isSnapped ? 'border-green-500 border-2' : 'border-blue-500 border-dashed'} z-50 pointer-events-none print:hidden opacity-70`} />
             <div className={`absolute bottom-[-28px] right-0 ${isSnapped ? 'bg-green-600' : 'bg-blue-600'} text-white text-xs px-2 py-1 rounded shadow-md z-50 whitespace-nowrap font-mono print:hidden transition-colors`}>
-                {Math.round(currentWidth)}px × {Math.round(currentHeight)}px
+                {currentWidth.toFixed(1)}cm × {currentHeight.toFixed(1)}cm
             </div>
         </>
       )}
 
-      <div className="absolute inset-0 border-4 border-gray-900 bg-white overflow-hidden flex flex-col">
-        <div className="flex flex-col h-full w-full" style={contentStyle}>
+      {/* Main Tag Content Area */}
+      <div className={`absolute inset-[0] transition-all duration-200 border-4 border-gray-900 bg-white overflow-hidden flex ${isRowLayout ? 'flex-row' : 'flex-col'}`}
+         style={{
+             top: `${currentPaddingY}cm`,
+             bottom: `${currentPaddingY}cm`,
+             left: `${currentPaddingX}cm`,
+             right: `${currentPaddingX}cm`,
+         }}
+      >
+        <div className={`flex h-full w-full ${isRowLayout ? 'flex-row' : 'flex-col'}`} style={contentStyle}>
             {sectionOrder.map((section, index) => {
             const isLast = index === sectionOrder.length - 1;
 
@@ -534,6 +726,27 @@ const PriceTag: React.FC<PriceTagProps> = ({
 
       {onVisualChange && (
         <>
+           {/* Orientation / Layout Controls */}
+           <div 
+             className="absolute top-6 left-6 z-40 no-print opacity-0 group-hover/tag:opacity-100 transition-opacity flex flex-col gap-1"
+           >
+                <button
+                  onClick={handleSwapDimensions}
+                  className="bg-white p-1.5 rounded-full shadow border border-gray-200 hover:bg-blue-50 text-gray-600 hover:text-blue-600 flex items-center justify-center"
+                  title="Swap Dimensions (Rotate Shape)"
+                >
+                  <RotateCw size={14} />
+                </button>
+
+                <button
+                  onClick={handleToggleLayout}
+                  className="bg-white p-1.5 rounded-full shadow border border-gray-200 hover:bg-blue-50 text-gray-600 hover:text-blue-600 flex items-center justify-center"
+                  title={isRowLayout ? "Switch to Vertical Layout" : "Switch to Horizontal Layout"}
+                >
+                  {isRowLayout ? <Columns size={14} /> : <Rows size={14} />}
+                </button>
+           </div>
+
            <div 
              className="absolute top-0 right-[-6px] w-4 h-full cursor-col-resize hover:bg-blue-400/20 z-20 no-print transition-colors"
              onMouseDown={(e) => startResize(e, 'w')}

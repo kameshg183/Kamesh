@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AppConfiguration, TagLabels, TagVisuals } from '../types';
-import { RotateCcw, Save, Type, Palette, LayoutTemplate, Check, Undo, Redo } from 'lucide-react';
+import { RotateCcw, Save, Type, Palette, LayoutTemplate, Check, Undo, Redo, Smartphone, Monitor } from 'lucide-react';
 import { DEFAULT_CONFIG } from '../constants';
 
 interface ConfigPanelProps {
@@ -39,6 +39,14 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
     onUpdate({
       ...config,
       visuals: { ...config.visuals, [key]: value }
+    });
+    setIsDirty(true);
+  };
+
+  const handleOrientationChange = (orientation: 'portrait' | 'landscape') => {
+    onUpdate({
+        ...config,
+        paperOrientation: orientation
     });
     setIsDirty(true);
   };
@@ -221,6 +229,41 @@ const ConfigPanel: React.FC<ConfigPanelProps> = ({
 
         {activeTab === 'visuals' && (
           <div className="space-y-8 animate-fadeIn">
+             {/* Paper Orientation */}
+             <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                <div className="mb-3">
+                    <label className="font-semibold text-gray-800 flex items-center">
+                        <LayoutTemplate className="w-4 h-4 mr-2 text-gray-500" />
+                        Paper Orientation
+                    </label>
+                    <p className="text-xs text-gray-500 mt-1">Select the paper layout for printing.</p>
+                </div>
+                <div className="flex gap-4">
+                    <button
+                        onClick={() => handleOrientationChange('portrait')}
+                        className={`flex-1 p-4 rounded-lg border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                            config.paperOrientation === 'portrait' || !config.paperOrientation
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 bg-white hover:border-blue-300'
+                        }`}
+                    >
+                        <Smartphone className="w-6 h-6" />
+                        <span className="font-medium text-sm">Portrait</span>
+                    </button>
+                    <button
+                        onClick={() => handleOrientationChange('landscape')}
+                        className={`flex-1 p-4 rounded-lg border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                            config.paperOrientation === 'landscape'
+                            ? 'border-blue-500 bg-blue-50 text-blue-700'
+                            : 'border-gray-200 bg-white hover:border-blue-300'
+                        }`}
+                    >
+                        <Monitor className="w-6 h-6" />
+                        <span className="font-medium text-sm">Landscape</span>
+                    </button>
+                </div>
+             </div>
+
              {/* Spacing Control */}
              <div className="bg-gray-50 p-5 rounded-lg border border-gray-200">
                 <div className="flex justify-between items-center mb-2">

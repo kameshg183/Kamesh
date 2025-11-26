@@ -11,6 +11,10 @@ Surf Excel Matic,2 Kg,450,380
 Tata Salt,1 Kg,28,24
 Red Label Tea,500g,280,240`;
 
+// Standard web DPI is 96. 1 inch = 2.54 cm.
+// 96 px / 2.54 cm = 37.7952755906 px/cm
+export const PX_PER_CM = 37.8;
+
 export const DEFAULT_TAG_LABELS: TagLabels = {
   currency: '₹',
   offLabel: 'Off',
@@ -25,14 +29,24 @@ export const DEFAULT_VISUALS: TagVisuals = {
   separatorThickness: 2,
   sectionSpacing: 1.5,
   sectionOrder: ['savings', 'product', 'footer'],
-  tagWidth: 380, // Optimized for 2-column A4
-  tagHeight: 300,
-  textScales: {}
+  
+  // Defaults in CM (approx 3.75 inches x 3 inches)
+  tagWidth: 10, 
+  tagHeight: 7.5,
+  
+  // Default padding in CM
+  paddingX: 0.5,
+  paddingY: 0.5,
+
+  textScales: {},
+  layoutDirection: 'col'
 };
 
 export const DEFAULT_CONFIG: AppConfiguration = {
   labels: DEFAULT_TAG_LABELS,
-  visuals: DEFAULT_VISUALS
+  visuals: DEFAULT_VISUALS,
+  paperOrientation: 'portrait',
+  pageOrientations: {}
 };
 
 export const FONT_THEMES: Record<FontTheme, { label: string; nameClass: string; priceClass: string; metaClass: string }> = {

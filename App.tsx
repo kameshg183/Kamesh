@@ -3,7 +3,7 @@ import { Product, TagSize, FontTheme, AppConfiguration, TagSection, TagVisuals }
 import InputForm from './components/InputForm';
 import PriceTag from './components/PriceTag';
 import ConfigPanel from './components/ConfigPanel';
-import { Printer, Settings, LayoutGrid, Type, List } from 'lucide-react';
+import { Printer, Settings, LayoutGrid, Type, List, RefreshCw } from 'lucide-react';
 import { FONT_THEMES, DEFAULT_CONFIG } from './constants';
 
 // --- History Hook / Logic ---
@@ -26,9 +26,16 @@ const App: React.FC = () => {
       const saved = localStorage.getItem('appConfig');
       if (saved) {
         const parsed = JSON.parse(saved);
+        // Migration check: If values look like pixels (> 50), convert roughly to cm or reset
+        let loadedVisuals = { ...DEFAULT_CONFIG.visuals, ...(parsed.visuals || {}) };
+        if (loadedVisuals.tagWidth > 50) loadedVisuals.tagWidth = DEFAULT_CONFIG.visuals.tagWidth;
+        if (loadedVisuals.tagHeight > 50) loadedVisuals.tagHeight = DEFAULT_CONFIG.visuals.tagHeight;
+
         return {
           labels: { ...DEFAULT_CONFIG.labels, ...(parsed.labels || parsed) },
-          visuals: { ...DEFAULT_CONFIG.visuals, ...(parsed.visuals || {}) }
+          visuals: loadedVisuals,
+          paperOrientation: parsed.paperOrientation || 'portrait',
+          pageOrientations: parsed.pageOrientations || {}
         };
       }
       return DEFAULT_CONFIG;
@@ -52,8 +59,7 @@ const App: React.FC = () => {
     setHistory(curr => {
       const nextPresent = typeof newConfig === 'function' ? newConfig(curr.present) : newConfig;
       
-      // Simple deep equality check to prevent history cluttering could go here, 
-      // but relying on React's nature for now.
+      // Simple deep equality check to prevent history cluttering
       if (JSON.stringify(curr.present) === JSON.stringify(nextPresent)) return curr;
 
       // Limit history stack size to 50
@@ -126,7 +132,6 @@ const App: React.FC = () => {
   const handleResetConfig = useCallback(() => {
     if (window.confirm('Are you sure you want to reset all configuration to default?')) {
       setAppConfig(DEFAULT_CONFIG);
-      // We don't auto-save here to let user undo, but we update history
     }
   }, [setAppConfig]);
 
@@ -160,12 +165,22 @@ const App: React.FC = () => {
     window.print();
   };
 
+  const handlePageOrientationToggle = (pageIndex: number, current: 'portrait' | 'landscape') => {
+    const newOrientation = current === 'landscape' ? 'portrait' : 'landscape';
+    setAppConfig(prev => ({
+        ...prev,
+        pageOrientations: {
+            ...prev.pageOrientations,
+            [pageIndex]: newOrientation
+        }
+    }));
+  };
+
   const handleProductVisualChange = (id: string, updates: Partial<TagVisuals>) => {
     setProducts(prev => prev.map(p => {
       if (p.id !== id) return p;
       const currentVisuals = p.customVisuals || { ...appConfig.visuals };
       
-      // If updates contain textScales, merge them deeply
       let newVisuals = { ...currentVisuals, ...updates };
       if (updates.textScales && currentVisuals.textScales) {
         newVisuals.textScales = { ...currentVisuals.textScales, ...updates.textScales };
@@ -178,37 +193,97 @@ const App: React.FC = () => {
     }));
   };
 
-  // --- Pagination Logic for A4 ---
-  const paginatedProducts = useMemo(() => {
-    const pages: Product[][] = [];
-    if (products.length === 0) return pages;
+  // --- Pagination Logic (Dynamic Flow with Per-Page Orientation & CM) ---
+  const paginatedResult = useMemo(() => {
+    if (products.length === 0) return { pages: [], orientations: [] };
 
-    const currentTagHeight = appConfig.visuals.tagHeight || 360;
-    
-    // A4 dimensions in px (approx 96 DPI)
-    // Width 210mm ~ 794px
-    // Height 297mm ~ 1123px
-    // Margins ~ 40px top/bottom total
-    const PAGE_HEIGHT = 1123;
-    const VERTICAL_MARGINS = 40; 
-    const AVAILABLE_HEIGHT = PAGE_HEIGHT - VERTICAL_MARGINS;
-    
-    // Row Gap (matches gap-y-6 which is 24px)
-    const ROW_GAP = 24; 
-    
-    // Calculate how many rows fit:
-    // (Rows * Height) + ((Rows - 1) * Gap) <= Available
-    // Rows * (Height + Gap) <= Available + Gap
-    const rowsPerPage = Math.max(1, Math.floor((AVAILABLE_HEIGHT + ROW_GAP) / (currentTagHeight + ROW_GAP)));
-    
-    // Always 2 columns for now as per design requirement
-    const itemsPerPage = rowsPerPage * 2; 
+    // A4 Dimensions in CM
+    const A4_WIDTH_CM = 21.0;
+    const A4_HEIGHT_CM = 29.7;
+    const PADDING_TOP_CM = 1.0;
+    const PADDING_LEFT_CM = 0.0; 
+    const GAP_X_CM = 0.4;
+    const GAP_Y_CM = 0.6;
 
-    for (let i = 0; i < products.length; i += itemsPerPage) {
-      pages.push(products.slice(i, i + itemsPerPage));
+    const defaultW = appConfig.visuals.tagWidth || 10;
+    const defaultH = appConfig.visuals.tagHeight || 8;
+
+    const resultPages: Product[][] = [];
+    const resultOrientations: ('portrait' | 'landscape')[] = [];
+
+    let globalIndex = 0;
+    let pageIndex = 0;
+
+    // Outer loop creates pages one by one
+    while (globalIndex < products.length) {
+        const orientation = appConfig.pageOrientations?.[pageIndex] || appConfig.paperOrientation || 'portrait';
+        resultOrientations.push(orientation);
+        
+        const isLand = orientation === 'landscape';
+        const PAGE_WIDTH = isLand ? A4_HEIGHT_CM : A4_WIDTH_CM;
+        const PAGE_HEIGHT = isLand ? A4_WIDTH_CM : A4_HEIGHT_CM;
+
+        const currentPageProducts: Product[] = [];
+        let currentY = PADDING_TOP_CM;
+
+        // Inner loop fills the current page
+        while (globalIndex < products.length) {
+            // Attempt to build a row
+            let tempIndex = globalIndex;
+            let rowWidth = PADDING_LEFT_CM;
+            let rowHeight = 0;
+            let rowCount = 0;
+
+            // Build Row Loop: Add items horizontally until width limit
+            while (tempIndex < products.length) {
+                const p = products[tempIndex];
+                // Fallback if data is corrupted or missing
+                const w = p.customVisuals?.tagWidth || defaultW;
+                const h = p.customVisuals?.tagHeight || defaultH;
+                const gap = rowCount > 0 ? GAP_X_CM : 0;
+
+                // Check if item fits in row
+                if (rowWidth + w + gap <= PAGE_WIDTH) {
+                    rowWidth += w + gap;
+                    rowHeight = Math.max(rowHeight, h);
+                    rowCount++;
+                    tempIndex++;
+                } else {
+                    break;
+                }
+            }
+
+            // Safety check: If a single item is wider than the page, force it in to prevent infinite loops
+            if (rowCount === 0 && tempIndex < products.length) {
+                 const p = products[tempIndex];
+                 rowHeight = p.customVisuals?.tagHeight || defaultH;
+                 rowCount = 1;
+                 tempIndex++;
+            }
+
+            // Check if this row fits vertically in current page
+            const gapY = currentPageProducts.length > 0 ? GAP_Y_CM : 0;
+            if (currentPageProducts.length > 0 && currentY + rowHeight + gapY > PAGE_HEIGHT) {
+                // Page is full vertically. Break inner loop to start new page.
+                break;
+            }
+
+            // Add row items to the page content
+            for (let i = globalIndex; i < tempIndex; i++) {
+                currentPageProducts.push(products[i]);
+            }
+            
+            // Advance cursor
+            currentY += rowHeight + gapY;
+            globalIndex = tempIndex;
+        }
+
+        resultPages.push(currentPageProducts);
+        pageIndex++;
     }
-    return pages;
-  }, [products, appConfig.visuals.tagHeight]);
+
+    return { pages: resultPages, orientations: resultOrientations };
+  }, [products, appConfig.visuals.tagWidth, appConfig.visuals.tagHeight, appConfig.paperOrientation, appConfig.pageOrientations]);
 
 
   // --- Drag and Drop for Products ---
@@ -248,6 +323,38 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
+      {/* Dynamic Print Styles for Mixed Orientations */}
+      <style>{`
+        @media print {
+            @page {
+                size: auto;
+                margin: 0;
+            }
+            @page p-portrait {
+                size: A4 portrait;
+            }
+            @page p-landscape {
+                size: A4 landscape;
+            }
+            .print-page-portrait {
+                page: p-portrait;
+            }
+            .print-page-landscape {
+                page: p-landscape;
+            }
+            .print-page {
+                break-after: page;
+                margin: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+                height: auto !important;
+                min-height: 0 !important;
+                overflow: visible !important;
+                width: auto !important;
+            }
+        }
+      `}</style>
+
       <header className="bg-gray-900 text-white shadow-md no-print sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-3">
           <div className="flex flex-col xl:flex-row justify-between items-center gap-4">
@@ -363,53 +470,77 @@ const App: React.FC = () => {
                 <div className="overflow-auto print:overflow-visible">
                    <div className="flex justify-between items-center mb-4 no-print">
                      <h2 className="text-xl font-bold text-gray-800">
-                       Print Preview ({products.length} Items - {paginatedProducts.length} Pages)
+                       Print Preview ({products.length} Items - {paginatedResult.pages.length} Sheets)
                      </h2>
-                     <span className="text-sm text-gray-500 bg-yellow-50 px-3 py-1 rounded border border-yellow-200">
-                       Tip: Drag tags to reorder. Drag edges to resize. Click text to change size.
-                     </span>
+                     <div className="flex gap-2 items-center">
+                        <span className="text-sm text-gray-500 bg-yellow-50 px-3 py-1 rounded border border-yellow-200">
+                           Tip: Use the rulers on hover to adjust padding.
+                        </span>
+                     </div>
                    </div>
                   
                   {/* Pages Loop */}
-                  {paginatedProducts.map((pageProducts, pageIndex) => (
-                    <div 
-                        key={pageIndex}
-                        className="print-page bg-white shadow-xl mb-8 mx-auto relative flex flex-wrap content-start justify-center gap-x-4 gap-y-6 pt-8 print:shadow-none print:m-0 print:mb-0 print:pt-4 print:break-after-page"
-                        style={{ width: '210mm', height: '297mm', minHeight: '297mm' }}
-                    >
-                        {/* Page Number Indicator (Screen only) */}
-                        <div className="absolute top-2 right-2 text-xs text-gray-300 no-print">Page {pageIndex + 1}</div>
-
-                        {pageProducts.map((product) => (
-                          <div 
-                              key={product.id} 
-                              className="relative group print:inline-block print:m-0 box-border cursor-grab active:cursor-grabbing"
-                              draggable={true}
-                              onDragStart={(e) => onProductDragStart(e, product.id)}
-                              onDragEnd={onProductDragEnd}
-                              onDragOver={onProductDragOver}
-                              onDrop={(e) => onProductDrop(e, product.id)}
-                          >
-                              <div className="p-0">
-                                  <PriceTag 
-                                    product={product} 
-                                    size={tagSize} 
-                                    fontTheme={fontTheme} 
-                                    config={appConfig}
-                                    onVisualChange={(updates) => handleProductVisualChange(product.id, updates)}
-                                  />
-                                  <button
-                                    onClick={() => handleRemoveProduct(product.id)}
-                                    className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity no-print z-10"
-                                    title="Remove Tag"
-                                  >
-                                    &times;
-                                  </button>
+                  {paginatedResult.pages.map((pageProducts, pageIndex) => {
+                    const orientation = paginatedResult.orientations[pageIndex];
+                    const isLandscape = orientation === 'landscape';
+                    
+                    return (
+                      <div 
+                          key={pageIndex}
+                          className={`print-page print-page-${orientation} bg-white shadow-xl mb-8 mx-auto relative flex flex-wrap content-start justify-center gap-x-2 gap-y-2 pt-4 print:shadow-none print:m-0 print:mb-0 print:pt-4 print:break-after-page group/sheet`}
+                          style={{ 
+                              width: isLandscape ? '297mm' : '210mm', 
+                              height: isLandscape ? '210mm' : '297mm',
+                              minHeight: isLandscape ? '210mm' : '297mm',
+                              transition: 'width 0.3s, height 0.3s'
+                          }}
+                      >
+                          {/* Page Controls Overlay */}
+                          <div className="absolute top-2 right-2 flex gap-2 no-print z-50">
+                              <div className="bg-gray-100 text-gray-400 px-2 py-1 rounded text-xs font-mono">
+                                  Sheet {pageIndex + 1}
                               </div>
+                              <button
+                                  onClick={() => handlePageOrientationToggle(pageIndex, orientation)}
+                                  className="bg-white border border-gray-300 hover:bg-blue-50 text-gray-600 hover:text-blue-600 px-2 py-1 rounded shadow-sm text-xs flex items-center gap-1 transition-colors"
+                                  title="Rotate this specific sheet"
+                              >
+                                  <RefreshCw size={12} />
+                                  {isLandscape ? 'Landscape' : 'Portrait'}
+                              </button>
                           </div>
-                        ))}
-                    </div>
-                  ))}
+
+                          {pageProducts.map((product) => (
+                            <div 
+                                key={product.id} 
+                                className="relative group print:inline-block print:m-0 box-border cursor-grab active:cursor-grabbing"
+                                draggable={true}
+                                onDragStart={(e) => onProductDragStart(e, product.id)}
+                                onDragEnd={onProductDragEnd}
+                                onDragOver={onProductDragOver}
+                                onDrop={(e) => onProductDrop(e, product.id)}
+                            >
+                                <div className="p-0">
+                                    <PriceTag 
+                                      product={product} 
+                                      size={tagSize} 
+                                      fontTheme={fontTheme} 
+                                      config={appConfig}
+                                      onVisualChange={(updates) => handleProductVisualChange(product.id, updates)}
+                                    />
+                                    <button
+                                      onClick={() => handleRemoveProduct(product.id)}
+                                      className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full shadow-lg opacity-0 group-hover:opacity-100 transition-opacity no-print z-10 w-6 h-6 flex items-center justify-center text-sm"
+                                      title="Remove Tag"
+                                    >
+                                      &times;
+                                    </button>
+                                </div>
+                            </div>
+                          ))}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </section>
@@ -433,7 +564,7 @@ const App: React.FC = () => {
                <h3 className="text-lg font-semibold text-gray-700 mb-4 text-center">Live Interactive Preview</h3>
                <p className="text-sm text-gray-500 text-center mb-6">Drag and drop sections on the card below to reorder them.</p>
                <div className="flex justify-center bg-gray-200 p-8 rounded-xl">
-                 <div className="w-[300px]">
+                 <div className="w-auto">
                     <PriceTag 
                       product={{
                         id: 'preview',
@@ -468,21 +599,6 @@ const App: React.FC = () => {
           Configuration Saved!
         </div>
       )}
-      
-      {/* Global styles for print pagination */}
-      <style>{`
-        @media print {
-            .print-page {
-                break-after: page;
-                margin: 0 !important;
-                box-shadow: none !important;
-                border: none !important;
-                height: auto !important;
-                min-height: 0 !important;
-                overflow: visible !important;
-            }
-        }
-      `}</style>
     </div>
   );
 };
